@@ -139,6 +139,9 @@ const App: React.FC = () => {
       return;
     }
 
+    // デバッグ: 現在の状態を確認
+    console.log("Submitting with userProfile:", userProfile);
+
     // 送信直前にプロフィールを再確認（「不明」対策）
     let currentUserName = userProfile?.displayName;
     let currentUserId = userProfile?.userId;
@@ -148,8 +151,10 @@ const App: React.FC = () => {
         const profile = await liff.getProfile();
         currentUserName = profile.displayName;
         currentUserId = profile.userId;
+        console.log("Profile re-fetched successfully:", profile);
       } catch (e) {
         console.error("Profile re-fetch failed", e);
+        addMessage("プロフィールの取得に失敗しました。LINEの権限設定を確認してください。", 'bot');
       }
     }
 
@@ -165,7 +170,8 @@ const App: React.FC = () => {
     };
 
     try {
-      await fetch(GAS_URL, {
+      console.log("Fetching GAS URL...");
+      const response = await fetch(GAS_URL, {
         method: 'POST',
         mode: 'no-cors', 
         headers: {
@@ -173,6 +179,7 @@ const App: React.FC = () => {
         },
         body: JSON.stringify(payload),
       });
+      console.log("Fetch call finished", response);
 
       setIsSubmitting(false);
       addMessage("ありがとうございます！記録が完了しました。", 'bot');
@@ -181,7 +188,7 @@ const App: React.FC = () => {
     } catch (err) {
       console.error("Submission failed", err);
       setIsSubmitting(false);
-      addMessage("送信に失敗しました。もう一度お試しください。", 'bot');
+      addMessage(`送信に失敗しました。エラー: ${err instanceof Error ? err.message : '未知のエラー'}`, 'bot');
     }
   };
 
