@@ -389,7 +389,10 @@ const App: React.FC = () => {
               <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
             </div>
             <p className="font-bold text-gray-800">送信が完了しました！</p>
-            <p className="text-sm text-gray-500">スプレッドシートに正常に記録されました。</p>
+            <p className="text-sm text-gray-500 whitespace-pre-line">
+              スケジュール確認後担当者からお返事します。{"\n"}
+              いましばらくお待ちください。
+            </p>
             <button 
               onClick={() => liff.closeWindow()}
               className="mt-4 w-full py-3 bg-green-500 text-white rounded-xl text-sm font-semibold hover:bg-green-600 transition-colors"
