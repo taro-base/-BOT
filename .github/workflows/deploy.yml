@@ -3,12 +3,17 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches:
-      - main  # または使用しているメインブランチ名に変更してください
+      - main  # または使用しているメインブランチ名
 
 permissions:
   contents: read
   pages: write
   id-token: write
+
+# 同時実行の制御（GitHub Pagesデプロイの推奨設定）
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -31,6 +36,10 @@ jobs:
         env:
           VITE_LIFF_ID: ${{ secrets.VITE_LIFF_ID }}
           VITE_GAS_WEB_APP_URL: ${{ secrets.VITE_GAS_WEB_APP_URL }}
+
+      # Viteビルド後に .nojekyll を作成して404問題を回避
+      - name: Add .nojekyll
+        run: touch dist/.nojekyll
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
