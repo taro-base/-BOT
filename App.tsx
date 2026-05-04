@@ -146,66 +146,63 @@ const App: React.FC = () => {
   };
 
   const submitToBackend = async () => {
-    if (!GAS_URL) {
-      addMessage("システムエラー: 送信先が設定されていません。", 'bot');
-      return;
-    }
+    if (!GAS_URL) return;
 
     setIsSubmitting(true);
-    addMessage("スプレッドシートに保存しています...", 'bot');
+    const summary = `【お届けヒアリング回答】\n日程: ${data.preferredDate}\n場所: ${data.location}${data.locationDetails ? ` (${data.locationDetails})` : ''}`;
 
     const payload = {
-      userName: userProfile?.displayName || "Unknown User",
-      message: `日程: ${data.preferredDate}, 場所: ${data.location}${data.locationDetails ? ` (${data.locationDetails})` : ''}`,
-      raw: data
+      userName: userProfile?.displayName || "不明",
+      userId: userProfile?.userId || "不明",
+      message: summary,
+      preferredDate: data.preferredDate,
+      location: data.location,
+      timestamp: new Date().toISOString()
     };
 
     try {
-      // GAS to receive data reliably
       await fetch(GAS_URL, {
         method: 'POST',
         mode: 'no-cors', 
         headers: {
-          'Content-Type': 'text/plain', // Use text/plain to avoid CORS preflight in simplified POST
+          'Content-Type': 'text/plain',
         },
         body: JSON.stringify(payload),
       });
 
-      // Since mode is 'no-cors', we can't read the response back,
-      // we assume it was received if no error occurred.
       setTimeout(() => {
         setIsSubmitting(false);
-        addMessage("送信が完了しました。ありがとうございます！", 'bot');
+        addMessage("ありがとうございます！送信が完了しました。", 'bot');
         setCurrentStep(Step.COMPLETED);
-      }, 1500);
+      }, 1000);
 
     } catch (err) {
       console.error("Submission failed", err);
       setIsSubmitting(false);
-      addMessage("送信に失敗しました。時間をおいて再度お試しください。", 'bot');
+      addMessage("送信に失敗しました。もう一度お試しください。", 'bot');
     }
   };
 
-  const sendToLine = () => {
+  const sendToLine = async () => {
     const summary = `【お届けヒアリング回答】\n日程: ${data.preferredDate}\n場所: ${data.location}${data.locationDetails ? ` (${data.locationDetails})` : ''}`;
     
-    // We can also send a message via LIFF talk API if the user is in LINE
-    if (liff.isInClient() && liff.getOS() !== 'web') {
-      liff.sendMessages([
-        {
-          type: 'text',
-          text: summary,
-        }
-      ]).then(() => {
-        submitToBackend();
-      }).catch((err) => {
+    // LINEトーク画面への送信
+    if (liff.isInClient()) {
+      try {
+        await liff.sendMessages([
+          {
+            type: 'text',
+            text: summary,
+          }
+        ]);
+        console.log("Message sent to LINE chat");
+      } catch (err) {
         console.error("sendMessages failed", err);
-        // Fallback to just backend if message sending fails
-        submitToBackend();
-      });
-    } else {
-      submitToBackend();
+      }
     }
+    
+    // バックエンド（GAS）への送信も行う
+    await submitToBackend();
   };
 
   return (
