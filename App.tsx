@@ -4,8 +4,28 @@ import { Step, ChatMessage, HearingData } from './types';
 import ChatBubble from './components/ChatBubble';
 import ActionPanel from './components/ActionPanel';
 
-const LIFF_ID = import.meta.env.VITE_LIFF_ID || "";
-const GAS_URL = import.meta.env.VITE_GAS_WEB_APP_URL || "";
+const sanitizeUrl = (value: string, isLiffId: boolean = false) => {
+  if (!value) return "";
+  // 1. 変数名が含まれている場合は削除 (例: VITE_LIFF_ID=xxx)
+  // あらゆるパターンに対応できるよう、さらに強力に。
+  let clean = value.trim()
+    .replace(/^VITE_LIFF_ID\s*=\s*/, "")
+    .replace(/^VITE_GAS_WEB_APP_URL\s*=\s*/, "")
+    .replace(/^['"]|['"]$/g, "")
+    .trim();
+  
+  // 2. LIFF IDの場合、URL全体が入ってしまっている場合は末尾のIDだけ抽出
+  if (isLiffId) {
+    if (clean.includes("liff.line.me/")) {
+      const parts = clean.split("liff.line.me/");
+      clean = parts[parts.length - 1].split(/[?#/]/)[0];
+    }
+  }
+  return clean;
+};
+
+const LIFF_ID = sanitizeUrl(import.meta.env.VITE_LIFF_ID || "", true);
+const GAS_URL = sanitizeUrl(import.meta.env.VITE_GAS_WEB_APP_URL || "");
 
 const App: React.FC = () => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -45,13 +65,17 @@ const App: React.FC = () => {
   useEffect(() => {
     const initLiff = async () => {
       try {
+        console.log("Starting LIFF Init with ID length:", LIFF_ID.length);
+        
         if (!LIFF_ID) {
-          console.error("LIFF_ID is missing from environment variables.");
-          addMessage("警告: LIFF_ID が設定されていません。Secretsを確認してください。", 'bot');
+          console.error("LIFF_ID is missing.");
+          addMessage("設定エラー: LIFF IDが空です。GitHubのSecretsを確認してください。", 'bot');
           setLiffInitDone(true);
           return;
         }
+
         await liff.init({ liffId: LIFF_ID });
+        console.log("LIFF Init success. Login status:", liff.isLoggedIn());
         
         if (liff.isLoggedIn()) {
           const profile = await liff.getProfile();
@@ -60,16 +84,18 @@ const App: React.FC = () => {
             pictureUrl: profile.pictureUrl,
             userId: profile.userId
           });
-          console.log("Profile loaded:", profile.displayName);
         } else {
-          // 未ログインなら自動でログインへ（スマホLINE内なら自動で通ります）
+          // スマホ内なら自動。ブラウザならログインを促す
           if (!liff.isInClient()) {
+            console.log("Not in client, triggering login...");
             liff.login();
           }
         }
       } catch (err) {
         console.error("LIFF initialization failed", err);
-        addMessage(`LIFF初期化エラー: ${err instanceof Error ? err.message : '初期化できませんでした'}`, 'bot');
+        const errMsg = err instanceof Error ? err.message : "Invalid LIFF ID";
+        // ユーザーにわかりやすくIDの状態を表示
+        addMessage(`エラー: ${errMsg}\n読み込まれたID: ${LIFF_ID.substring(0, 4)}... (長さ: ${LIFF_ID.length})`, 'bot');
       } finally {
         setLiffInitDone(true);
       }
