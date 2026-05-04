@@ -1,8 +1,6 @@
 {
   "name": "Line Hearing Chatbot",
   "description": "A conversational interview tool to collect delivery preferences (date and location) and send them directly to a LINE Official Account.",
-  "requestFramePermissions": [
-    "geolocation"
-  ],
+  "requestFramePermissions": [],
   "majorCapabilities": []
 }

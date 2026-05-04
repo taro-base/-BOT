@@ -122,7 +122,7 @@ const App: React.FC = () => {
     
     if (choice === 'ほかの場所') {
       setIsOtherLocation(true);
-      addMessage("地図で場所を選択するか、住所を入力してください。", 'bot');
+      addMessage("お届け先の詳細を入力してください。", 'bot');
     } else {
       setData((prev) => ({ ...prev, location: choice }));
       showConfirmation(choice);
