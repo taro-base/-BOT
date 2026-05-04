@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import liff from '@line/liff';
 import { Step, ChatMessage, HearingData } from './types';
@@ -47,7 +46,7 @@ const App: React.FC = () => {
     const initLiff = async () => {
       try {
         if (!LIFF_ID) {
-          console.warn("LIFF_ID is not defined. Running in demo mode.");
+          console.warn("LIFF_ID is not defined.");
           setLiffInitDone(true);
           return;
         }
@@ -61,7 +60,6 @@ const App: React.FC = () => {
             userId: profile.userId
           });
         } else {
-          // 未ログインならログインを促す
           liff.login();
         }
       } catch (err) {
@@ -77,8 +75,6 @@ const App: React.FC = () => {
   useEffect(() => {
     if (!liffInitDone) return; 
 
-    const displayName = userProfile?.displayName || "使い手";
-
     const timer = setTimeout(() => {
       addMessage(`お世話になっております！お届けに関して、ご希望をお伺いします。`, 'bot');
       setTimeout(() => {
@@ -87,7 +83,7 @@ const App: React.FC = () => {
       }, 800);
     }, 500);
     return () => clearTimeout(timer);
-  }, [liffInitDone, userProfile, addMessage]);
+  }, [liffInitDone, addMessage]);
 
   const handleDateSelect = (choice: string) => {
     addMessage(choice, 'user');
@@ -119,17 +115,17 @@ const App: React.FC = () => {
   const handleLocationSelect = (choice: string) => {
     addMessage(choice, 'user');
     setData((prev) => ({ ...prev, location: choice }));
-    showConfirmation(choice);
+    showConfirmation();
   };
 
   const handleCustomLocationSubmit = (locStr: string) => {
     if (!locStr) return;
     addMessage(`${locStr} でお願いします`, 'user');
     setData((prev) => ({ ...prev, location: locStr }));
-    showConfirmation(locStr);
+    showConfirmation();
   };
 
-  const showConfirmation = (locationLabel: string) => {
+  const showConfirmation = () => {
     setTimeout(() => {
       addMessage("ありがとうございます。以下の内容で送信しますか？", 'bot');
       setCurrentStep(Step.CONFIRMATION);
@@ -138,16 +134,30 @@ const App: React.FC = () => {
 
   const submitToBackend = async () => {
     if (!GAS_URL) {
-      addMessage("システム設定エラー: GAS送信先が設定されていません。環境変数を確認してください。", 'bot');
+      addMessage("システム設定エラー: GAS送信先が設定されていません。", 'bot');
       setIsSubmitting(false);
       return;
+    }
+
+    // 送信直前にプロフィールを再確認（「不明」対策）
+    let currentUserName = userProfile?.displayName;
+    let currentUserId = userProfile?.userId;
+
+    if (!currentUserName && liff.isLoggedIn()) {
+      try {
+        const profile = await liff.getProfile();
+        currentUserName = profile.displayName;
+        currentUserId = profile.userId;
+      } catch (e) {
+        console.error("Profile re-fetch failed", e);
+      }
     }
 
     const summary = `【お届けヒアリング回答】\n日程: ${data.preferredDate}\n場所: ${data.location}`;
 
     const payload = {
-      userName: userProfile?.displayName || "不明",
-      userId: userProfile?.userId || "不明",
+      userName: currentUserName || "不明",
+      userId: currentUserId || "不明",
       message: summary,
       preferredDate: data.preferredDate,
       location: data.location,
@@ -155,8 +165,6 @@ const App: React.FC = () => {
     };
 
     try {
-      console.log("Submitting to GAS...", GAS_URL);
-      // GASへの送信
       await fetch(GAS_URL, {
         method: 'POST',
         mode: 'no-cors', 
@@ -166,15 +174,14 @@ const App: React.FC = () => {
         body: JSON.stringify(payload),
       });
 
-      // no-corsモードではレスポンスを確認できないため、送信完了として扱う
       setIsSubmitting(false);
-      addMessage("ありがとうございます！スプレッドシートへの記録が完了しました。", 'bot');
+      addMessage("ありがとうございます！記録が完了しました。", 'bot');
       setCurrentStep(Step.COMPLETED);
 
     } catch (err) {
       console.error("Submission failed", err);
       setIsSubmitting(false);
-      addMessage("ネットワークエラーにより送信に失敗しました。もう一度お試しください。", 'bot');
+      addMessage("送信に失敗しました。もう一度お試しください。", 'bot');
     }
   };
 
@@ -182,7 +189,6 @@ const App: React.FC = () => {
     setIsSubmitting(true);
     const summary = `【お届けヒアリング回答】\n日程: ${data.preferredDate}\n場所: ${data.location}`;
     
-    // LINEトーク画面への送信
     if (liff.isInClient()) {
       try {
         await liff.sendMessages([
@@ -191,18 +197,11 @@ const App: React.FC = () => {
             text: summary,
           }
         ]);
-        console.log("LINE chat message sent successfully");
       } catch (err) {
-        console.error("sendMessages failed:", err);
-        // トークルーム以外で開いている場合などはここに来ます
-        addMessage("LINEチャットへの送信に失敗しました（トークルームから開いてください）。スプレッドシートへの保存を試みます。", 'bot');
+        console.error("sendMessages failed", err);
       }
-    } else {
-      console.log("Not in LINE client, skipping sendMessages");
-      addMessage("LINE外のブラウザです。スプレッドシートへの保存のみ実行します。", 'bot');
     }
     
-    // バックエンド（GAS/スプレッドシート）への送信
     await submitToBackend();
   };
 
@@ -232,12 +231,6 @@ const App: React.FC = () => {
             </p>
           </div>
         </div>
-        <button 
-          onClick={() => window.location.reload()}
-          className="text-gray-400 hover:text-gray-600 transition-colors"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
-        </button>
       </header>
 
       {/* Chat Area */}
@@ -251,7 +244,7 @@ const App: React.FC = () => {
           </ChatBubble>
         ))}
         {currentStep === Step.CONFIRMATION && (
-          <div className="bg-white border border-gray-100 rounded-xl p-4 mb-4 shadow-sm animate-in fade-in zoom-in duration-300">
+          <div className="bg-white border border-gray-100 rounded-xl p-4 mb-4 shadow-sm">
             <h3 className="font-bold text-gray-800 mb-2 border-b pb-1">確認内容</h3>
             <div className="space-y-1 text-sm text-gray-600">
               <p><span className="font-semibold text-gray-400">希望日程:</span> {data.preferredDate}</p>
@@ -264,7 +257,7 @@ const App: React.FC = () => {
       {/* Footer / Inputs */}
       <ActionPanel>
         {currentStep === Step.SELECT_DATE && !isOtherDate && (
-          <>
+          <div className="flex gap-2 flex-wrap">
             <button onClick={() => handleDateSelect('明日 午前中 (9:00〜12:00くらい)')} className="flex-1 min-w-[140px] px-4 py-3 bg-white border-2 border-green-500 text-green-600 rounded-xl font-semibold hover:bg-green-50 transition-all text-sm">
               明日 午前中
             </button>
@@ -274,51 +267,32 @@ const App: React.FC = () => {
             <button onClick={() => handleDateSelect('ほかの日にち')} className="flex-1 min-w-[140px] px-4 py-3 bg-gray-100 border-2 border-gray-100 text-gray-600 rounded-xl font-semibold hover:bg-gray-200 transition-all text-sm">
               ほかの日にち
             </button>
-          </>
+          </div>
         )}
 
         {currentStep === Step.SELECT_DATE && isOtherDate && (
           <div className="w-full flex flex-col gap-2">
             <input 
               type="date" 
-              className="w-full p-3 border-2 border-green-200 rounded-xl focus:border-green-500 outline-none transition-all"
+              className="w-full p-3 border-2 border-green-200 rounded-xl focus:border-green-500 outline-none"
               onChange={(e) => handleCustomDateSubmit(e.target.value)}
             />
-            <button 
-              onClick={() => setIsOtherDate(false)}
-              className="text-xs text-gray-400 font-medium hover:text-gray-600 underline"
-            >
-              戻る
-            </button>
+            <button onClick={() => setIsOtherDate(false)} className="text-xs text-gray-400 underline">戻る</button>
           </div>
         )}
 
         {currentStep === Step.SELECT_LOCATION && (
           <div className="w-full flex flex-col gap-3">
-            <div className="flex gap-2 flex-wrap">
-              <button 
-                onClick={() => handleLocationSelect('いつものところ')} 
-                className="flex-1 min-w-[140px] px-4 py-3 bg-white border-2 border-green-500 text-green-600 rounded-xl font-semibold hover:bg-green-50 transition-all text-sm"
-              >
-                いつものところ
-              </button>
-              <button 
-                onClick={() => handleLocationSelect('店舗まで取りに行く')} 
-                className="flex-1 min-w-[140px] px-4 py-3 bg-white border-2 border-green-500 text-green-600 rounded-xl font-semibold hover:bg-green-50 transition-all text-sm"
-              >
-                店舗まで
-              </button>
+            <div className="flex gap-2">
+              <button onClick={() => handleLocationSelect('いつものところ')} className="flex-1 px-4 py-3 bg-white border-2 border-green-500 text-green-600 rounded-xl font-semibold text-sm">いつもの</button>
+              <button onClick={() => handleLocationSelect('店舗受取')} className="flex-1 px-4 py-3 bg-white border-2 border-green-500 text-green-600 rounded-xl font-semibold text-sm">店舗受取</button>
             </div>
-            
-            <div className="relative mt-2">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
-              </div>
+            <div className="relative">
               <input 
                 id="custom-location-input"
                 type="text" 
                 placeholder="新しい住所を入力..."
-                className="w-full pl-10 pr-16 py-3 border-2 border-gray-100 rounded-xl focus:border-green-500 outline-none transition-all text-sm"
+                className="w-full pl-4 pr-16 py-3 border-2 border-gray-100 rounded-xl outline-none text-sm"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     handleCustomLocationSubmit((e.target as HTMLInputElement).value);
@@ -332,50 +306,19 @@ const App: React.FC = () => {
                   handleCustomLocationSubmit(input.value);
                   input.value = '';
                 }}
-                className="absolute right-2 top-1.5 bottom-1.5 px-3 bg-green-500 text-white rounded-lg text-xs font-bold hover:bg-green-600 transition-colors"
-              >
-                決定
-              </button>
+                className="absolute right-2 top-1.5 bottom-1.5 px-3 bg-green-500 text-white rounded-lg text-xs font-bold"
+              >決定</button>
             </div>
           </div>
         )}
 
         {currentStep === Step.CONFIRMATION && (
-          <>
-            <button 
-              onClick={sendToLine}
-              disabled={isSubmitting}
-              className={`w-full py-4 bg-green-500 text-white rounded-2xl font-bold text-lg shadow-lg shadow-green-200 hover:bg-green-600 transform active:scale-95 transition-all flex items-center justify-center gap-2 ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
-            >
-              {isSubmitting ? (
-                <span className="flex items-center gap-2">
-                  <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  送信中...
-                </span>
-              ) : (
-                <>
-                  <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M24 10.304c0-4.587-4.79-8.304-10.678-8.304-5.888 0-10.678 3.717-10.678 8.304 0 4.11 3.807 7.545 8.95 8.197.349.075.823.23.944.529.108.266.071.684.035.953-.127.915-.558 3.667-.62 4.09-.071.477.33.186 1.155-.547.763-.678 4.12-3.807 5.621-5.632 1.487.03 2.802-.455 3.832-1.258 1.139-.884 1.444-2.333 1.444-6.332z"/>
-                  </svg>
-                  回答を送信する
-                </>
-              )}
+          <div className="w-full space-y-2">
+            <button onClick={sendToLine} disabled={isSubmitting} className="w-full py-4 bg-green-500 text-white rounded-2xl font-bold text-lg shadow-lg">
+              {isSubmitting ? "送信中..." : "回答を送信する"}
             </button>
-            <button 
-              onClick={() => {
-                setMessages([]);
-                setCurrentStep(Step.GREETING);
-                setData({ preferredDate: '', location: '' });
-                window.location.reload();
-              }}
-              className="w-full py-3 bg-white border-2 border-gray-100 text-gray-400 rounded-2xl font-bold hover:bg-gray-50 transition-all text-sm"
-            >
-              最初からやり直す
-            </button>
-          </>
+            <button onClick={() => window.location.reload()} className="w-full py-2 text-gray-400 text-sm">最初からやり直す</button>
+          </div>
         )}
 
         {currentStep === Step.COMPLETED && (
@@ -384,22 +327,8 @@ const App: React.FC = () => {
               <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
             </div>
             <p className="font-bold text-gray-800">送信が完了しました！</p>
-            <p className="text-sm text-gray-500 whitespace-pre-line">
-              スケジュール確認後担当者からお返事します。{"\n"}
-              いましばらくお待ちください。
-            </p>
-            <button 
-              onClick={() => liff.closeWindow()}
-              className="mt-4 w-full py-3 bg-green-500 text-white rounded-xl text-sm font-semibold hover:bg-green-600 transition-colors"
-            >
-              閉じる
-            </button>
-            <button 
-              onClick={() => window.location.reload()}
-              className="mt-2 text-xs text-gray-400 underline"
-            >
-              新しく回答する
-            </button>
+            <p className="text-sm text-gray-500">スケジュール確認後、担当者からお返事します。</p>
+            <button onClick={() => liff.closeWindow()} className="mt-4 w-full py-3 bg-green-500 text-white rounded-xl text-sm font-semibold">閉じる</button>
           </div>
         )}
       </ActionPanel>
