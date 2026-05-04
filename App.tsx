@@ -46,7 +46,8 @@ const App: React.FC = () => {
     const initLiff = async () => {
       try {
         if (!LIFF_ID) {
-          console.warn("LIFF_ID is not defined.");
+          console.error("LIFF_ID is missing from environment variables.");
+          addMessage("警告: LIFF_ID が設定されていません。Secretsを確認してください。", 'bot');
           setLiffInitDone(true);
           return;
         }
@@ -59,17 +60,22 @@ const App: React.FC = () => {
             pictureUrl: profile.pictureUrl,
             userId: profile.userId
           });
+          console.log("Profile loaded:", profile.displayName);
         } else {
-          liff.login();
+          // 未ログインなら自動でログインへ（スマホLINE内なら自動で通ります）
+          if (!liff.isInClient()) {
+            liff.login();
+          }
         }
       } catch (err) {
         console.error("LIFF initialization failed", err);
+        addMessage(`LIFF初期化エラー: ${err instanceof Error ? err.message : '初期化できませんでした'}`, 'bot');
       } finally {
         setLiffInitDone(true);
       }
     };
     initLiff();
-  }, []);
+  }, [addMessage]);
 
   // Initial greeting
   useEffect(() => {
@@ -141,20 +147,20 @@ const App: React.FC = () => {
 
     // デバッグ: 現在の状態を確認
     console.log("Submitting with userProfile:", userProfile);
+    console.log("LIFF Login Status:", liff.isLoggedIn());
 
-    // 送信直前にプロフィールを再確認（「不明」対策）
+    // 送信直前にプロフィールを最終確認（「不明」対策）
     let currentUserName = userProfile?.displayName;
     let currentUserId = userProfile?.userId;
 
-    if (!currentUserName && liff.isLoggedIn()) {
+    if (liff.isLoggedIn()) {
       try {
         const profile = await liff.getProfile();
         currentUserName = profile.displayName;
         currentUserId = profile.userId;
-        console.log("Profile re-fetched successfully:", profile);
+        console.log("Profile re-fetched successfully:", currentUserName);
       } catch (e) {
-        console.error("Profile re-fetch failed", e);
-        addMessage("プロフィールの取得に失敗しました。LINEの権限設定を確認してください。", 'bot');
+        console.error("Profile re-fetch failed during submission:", e);
       }
     }
 
@@ -230,12 +236,16 @@ const App: React.FC = () => {
           )}
           <div>
             <h1 className="font-bold text-gray-800">
-              {userProfile?.displayName ? `${userProfile.displayName}さんの回答` : 'ヒアリングBot'}
+              {userProfile?.displayName ? `${userProfile.displayName}さんの回答` : '回答フォーム'}
             </h1>
-            <p className="text-xs text-green-500 font-medium flex items-center gap-1">
-              <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-              LINE公式アカウント連携中
-            </p>
+            <div className="flex items-center gap-2">
+              <p className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${LIFF_ID ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
+                LIFF: {LIFF_ID ? '設定済' : '未設定'}
+              </p>
+              <p className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${userProfile ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-600'}`}>
+                認証: {userProfile ? 'OK' : '未完了'}
+              </p>
+            </div>
           </div>
         </div>
       </header>
