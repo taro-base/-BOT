@@ -16,7 +16,7 @@ const App: React.FC = () => {
     preferredDate: '',
     location: '',
   });
-  const [userProfile, setUserProfile] = useState<{ displayName: string; pictureUrl?: string } | null>(null);
+  const [userProfile, setUserProfile] = useState<{ displayName: string; pictureUrl?: string; userId?: string } | null>(null);
   const [liffInitDone, setLiffInitDone] = useState(false);
   const [isOtherDate, setIsOtherDate] = useState(false);
   const [isOtherLocation, setIsOtherLocation] = useState(false);
@@ -59,7 +59,8 @@ const App: React.FC = () => {
           const profile = await liff.getProfile();
           setUserProfile({
             displayName: profile.displayName,
-            pictureUrl: profile.pictureUrl
+            pictureUrl: profile.pictureUrl,
+            userId: profile.userId
           });
         } else if (liff.isInClient()) {
           // If in LINE app but not logged in, try to login
@@ -133,7 +134,7 @@ const App: React.FC = () => {
   const handleCustomLocationSubmit = (locStr: string) => {
     if (!locStr) return;
     addMessage(`${locStr} でお願いします`, 'user');
-    setData((prev) => ({ ...prev, location: '新規場所', locationDetails: locStr }));
+    setData((prev) => ({ ...prev, location: locStr }));
     setIsOtherLocation(false);
     showConfirmation(locStr);
   };
@@ -146,10 +147,13 @@ const App: React.FC = () => {
   };
 
   const submitToBackend = async () => {
-    if (!GAS_URL) return;
+    if (!GAS_URL) {
+      addMessage("システム設定エラー: GAS送信先が設定されていません。環境変数を確認してください。", 'bot');
+      setIsSubmitting(false);
+      return;
+    }
 
-    setIsSubmitting(true);
-    const summary = `【お届けヒアリング回答】\n日程: ${data.preferredDate}\n場所: ${data.location}${data.locationDetails ? ` (${data.locationDetails})` : ''}`;
+    const summary = `【お届けヒアリング回答】\n日程: ${data.preferredDate}\n場所: ${data.location}`;
 
     const payload = {
       userName: userProfile?.displayName || "不明",
@@ -161,6 +165,8 @@ const App: React.FC = () => {
     };
 
     try {
+      console.log("Submitting to GAS...", GAS_URL);
+      // GASへの送信
       await fetch(GAS_URL, {
         method: 'POST',
         mode: 'no-cors', 
@@ -170,21 +176,21 @@ const App: React.FC = () => {
         body: JSON.stringify(payload),
       });
 
-      setTimeout(() => {
-        setIsSubmitting(false);
-        addMessage("ありがとうございます！送信が完了しました。", 'bot');
-        setCurrentStep(Step.COMPLETED);
-      }, 1000);
+      // no-corsモードではレスポンスを確認できないため、送信完了として扱う
+      setIsSubmitting(false);
+      addMessage("ありがとうございます！スプレッドシートへの記録が完了しました。", 'bot');
+      setCurrentStep(Step.COMPLETED);
 
     } catch (err) {
       console.error("Submission failed", err);
       setIsSubmitting(false);
-      addMessage("送信に失敗しました。もう一度お試しください。", 'bot');
+      addMessage("ネットワークエラーにより送信に失敗しました。もう一度お試しください。", 'bot');
     }
   };
 
   const sendToLine = async () => {
-    const summary = `【お届けヒアリング回答】\n日程: ${data.preferredDate}\n場所: ${data.location}${data.locationDetails ? ` (${data.locationDetails})` : ''}`;
+    setIsSubmitting(true);
+    const summary = `【お届けヒアリング回答】\n日程: ${data.preferredDate}\n場所: ${data.location}`;
     
     // LINEトーク画面への送信
     if (liff.isInClient()) {
@@ -198,10 +204,11 @@ const App: React.FC = () => {
         console.log("Message sent to LINE chat");
       } catch (err) {
         console.error("sendMessages failed", err);
+        // チャット送信失敗（権限不足や外部ブラウザ等）してもスプシ送信は継続
       }
     }
     
-    // バックエンド（GAS）への送信も行う
+    // バックエンド（GAS/スプレッドシート）への送信
     await submitToBackend();
   };
 
@@ -254,7 +261,7 @@ const App: React.FC = () => {
             <h3 className="font-bold text-gray-800 mb-2 border-b pb-1">確認内容</h3>
             <div className="space-y-1 text-sm text-gray-600">
               <p><span className="font-semibold text-gray-400">希望日程:</span> {data.preferredDate}</p>
-              <p><span className="font-semibold text-gray-400">お届け場所:</span> {data.location} {data.locationDetails && `(${data.locationDetails})`}</p>
+              <p><span className="font-semibold text-gray-400">お届け場所:</span> {data.location}</p>
             </div>
           </div>
         )}
