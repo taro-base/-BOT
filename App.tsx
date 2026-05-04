@@ -4,7 +4,6 @@ import liff from '@line/liff';
 import { Step, ChatMessage, HearingData } from './types';
 import ChatBubble from './components/ChatBubble';
 import ActionPanel from './components/ActionPanel';
-import MapPicker from './components/MapPicker';
 
 const LIFF_ID = import.meta.env.VITE_LIFF_ID || "";
 const GAS_URL = import.meta.env.VITE_GAS_WEB_APP_URL || "";
@@ -19,7 +18,6 @@ const App: React.FC = () => {
   const [userProfile, setUserProfile] = useState<{ displayName: string; pictureUrl?: string; userId?: string } | null>(null);
   const [liffInitDone, setLiffInitDone] = useState(false);
   const [isOtherDate, setIsOtherDate] = useState(false);
-  const [isOtherLocation, setIsOtherLocation] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -62,11 +60,10 @@ const App: React.FC = () => {
             pictureUrl: profile.pictureUrl,
             userId: profile.userId
           });
-        } else if (liff.isInClient()) {
-          // If in LINE app but not logged in, try to login
+        } else {
+          // 未ログインならログインを促す
           liff.login();
         }
-        // If in external browser and not logged in, we stay as guest to allow preview
       } catch (err) {
         console.error("LIFF initialization failed", err);
       } finally {
@@ -121,21 +118,14 @@ const App: React.FC = () => {
 
   const handleLocationSelect = (choice: string) => {
     addMessage(choice, 'user');
-    
-    if (choice === 'ほかの場所') {
-      setIsOtherLocation(true);
-      addMessage("お届け先の詳細を入力してください。", 'bot');
-    } else {
-      setData((prev) => ({ ...prev, location: choice }));
-      showConfirmation(choice);
-    }
+    setData((prev) => ({ ...prev, location: choice }));
+    showConfirmation(choice);
   };
 
   const handleCustomLocationSubmit = (locStr: string) => {
     if (!locStr) return;
     addMessage(`${locStr} でお願いします`, 'user');
     setData((prev) => ({ ...prev, location: locStr }));
-    setIsOtherLocation(false);
     showConfirmation(locStr);
   };
 
@@ -201,11 +191,15 @@ const App: React.FC = () => {
             text: summary,
           }
         ]);
-        console.log("Message sent to LINE chat");
+        console.log("LINE chat message sent successfully");
       } catch (err) {
-        console.error("sendMessages failed", err);
-        // チャット送信失敗（権限不足や外部ブラウザ等）してもスプシ送信は継続
+        console.error("sendMessages failed:", err);
+        // トークルーム以外で開いている場合などはここに来ます
+        addMessage("LINEチャットへの送信に失敗しました（トークルームから開いてください）。スプレッドシートへの保存を試みます。", 'bot');
       }
+    } else {
+      console.log("Not in LINE client, skipping sendMessages");
+      addMessage("LINE外のブラウザです。スプレッドシートへの保存のみ実行します。", 'bot');
     }
     
     // バックエンド（GAS/スプレッドシート）への送信
@@ -299,23 +293,50 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {currentStep === Step.SELECT_LOCATION && !isOtherLocation && (
-          <>
-            <button onClick={() => handleLocationSelect('いつものところ')} className="flex-1 min-w-[140px] px-4 py-3 bg-white border-2 border-green-500 text-green-600 rounded-xl font-semibold hover:bg-green-50 transition-all text-sm">
-              いつものところ
-            </button>
-            <button onClick={() => handleLocationSelect('ほかの場所')} className="flex-1 min-w-[140px] px-4 py-3 bg-gray-100 border-2 border-gray-100 text-gray-600 rounded-xl font-semibold hover:bg-gray-200 transition-all text-sm">
-              ほかの場所
-            </button>
-          </>
-        )}
-
-        {currentStep === Step.SELECT_LOCATION && isOtherLocation && (
-          <div className="w-full">
-            <MapPicker 
-              onSelect={(address) => handleCustomLocationSubmit(address)}
-              onCancel={() => setIsOtherLocation(false)}
-            />
+        {currentStep === Step.SELECT_LOCATION && (
+          <div className="w-full flex flex-col gap-3">
+            <div className="flex gap-2 flex-wrap">
+              <button 
+                onClick={() => handleLocationSelect('いつものところ')} 
+                className="flex-1 min-w-[140px] px-4 py-3 bg-white border-2 border-green-500 text-green-600 rounded-xl font-semibold hover:bg-green-50 transition-all text-sm"
+              >
+                いつものところ
+              </button>
+              <button 
+                onClick={() => handleLocationSelect('店舗まで取りに行く')} 
+                className="flex-1 min-w-[140px] px-4 py-3 bg-white border-2 border-green-500 text-green-600 rounded-xl font-semibold hover:bg-green-50 transition-all text-sm"
+              >
+                店舗まで
+              </button>
+            </div>
+            
+            <div className="relative mt-2">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+              </div>
+              <input 
+                id="custom-location-input"
+                type="text" 
+                placeholder="新しい住所を入力..."
+                className="w-full pl-10 pr-16 py-3 border-2 border-gray-100 rounded-xl focus:border-green-500 outline-none transition-all text-sm"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleCustomLocationSubmit((e.target as HTMLInputElement).value);
+                    (e.target as HTMLInputElement).value = '';
+                  }
+                }}
+              />
+              <button 
+                onClick={() => {
+                  const input = document.getElementById('custom-location-input') as HTMLInputElement;
+                  handleCustomLocationSubmit(input.value);
+                  input.value = '';
+                }}
+                className="absolute right-2 top-1.5 bottom-1.5 px-3 bg-green-500 text-white rounded-lg text-xs font-bold hover:bg-green-600 transition-colors"
+              >
+                決定
+              </button>
+            </div>
           </div>
         )}
 
