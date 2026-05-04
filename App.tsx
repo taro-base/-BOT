@@ -81,7 +81,7 @@ const App: React.FC = () => {
     const displayName = userProfile?.displayName || "使い手";
 
     const timer = setTimeout(() => {
-      addMessage(`${displayName}さん、こんにちは！お届けに関するヒアリングを開始します。`, 'bot');
+      addMessage(`お世話になっております！お届けに関して、ご希望をお伺いします。`, 'bot');
       setTimeout(() => {
         addMessage("まず、ご希望の日程を教えてください。", 'bot');
         setCurrentStep(Step.SELECT_DATE);
