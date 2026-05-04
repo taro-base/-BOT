@@ -4,6 +4,7 @@ import liff from '@line/liff';
 import { Step, ChatMessage, HearingData } from './types';
 import ChatBubble from './components/ChatBubble';
 import ActionPanel from './components/ActionPanel';
+import MapPicker from './components/MapPicker';
 
 const LIFF_ID = import.meta.env.VITE_LIFF_ID || "";
 const GAS_URL = import.meta.env.VITE_GAS_WEB_APP_URL || "";
@@ -306,42 +307,11 @@ const App: React.FC = () => {
         )}
 
         {currentStep === Step.SELECT_LOCATION && isOtherLocation && (
-          <div className="w-full space-y-3">
-             <div className="bg-gray-100 rounded-xl h-40 overflow-hidden relative border-2 border-dashed border-gray-300 group hover:border-green-400 transition-colors">
-                <iframe 
-                  title="Mock Map"
-                  src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d103746.50570659637!2d139.70405!3d35.6895!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x60188b8576281c27%3A0x446dccdc883461e7!2z5p2x5Lqs6YO95paw5a6_5Yy6!5e0!3m2!1sja!2sjp!4v1715000000000!5m2!1sja!2sjp" 
-                  className="w-full h-full border-0"
-                  loading="lazy"
-                ></iframe>
-                <div className="absolute inset-0 bg-black/5 pointer-events-none group-hover:bg-transparent transition-all"></div>
-                <div className="absolute bottom-2 right-2 bg-white px-2 py-1 rounded shadow text-[10px] text-gray-500 font-medium">
-                  Google Map プレビュー
-                </div>
-             </div>
-             <div className="flex gap-2">
-                <input 
-                  id="loc-input"
-                  type="text" 
-                  placeholder="住所または建物名を入力" 
-                  className="flex-1 p-3 border-2 border-green-100 rounded-xl focus:border-green-500 outline-none transition-all text-sm"
-                />
-                <button 
-                  onClick={() => {
-                    const val = (document.getElementById('loc-input') as HTMLInputElement).value;
-                    handleCustomLocationSubmit(val || '指定された場所');
-                  }}
-                  className="px-6 bg-green-500 text-white rounded-xl font-bold hover:bg-green-600 transition-all"
-                >
-                  決定
-                </button>
-             </div>
-             <button 
-              onClick={() => setIsOtherLocation(false)}
-              className="text-xs text-gray-400 font-medium hover:text-gray-600 underline block text-center w-full"
-            >
-              戻る
-            </button>
+          <div className="w-full">
+            <MapPicker 
+              onSelect={(address) => handleCustomLocationSubmit(address)}
+              onCancel={() => setIsOtherLocation(false)}
+            />
           </div>
         )}
 
