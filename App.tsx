@@ -16,6 +16,7 @@ const App: React.FC = () => {
     location: '',
   });
   const [userProfile, setUserProfile] = useState<{ displayName: string; pictureUrl?: string } | null>(null);
+  const [liffInitDone, setLiffInitDone] = useState(false);
   const [isOtherDate, setIsOtherDate] = useState(false);
   const [isOtherLocation, setIsOtherLocation] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -47,21 +48,27 @@ const App: React.FC = () => {
     const initLiff = async () => {
       try {
         if (!LIFF_ID) {
-          console.error("LIFF_ID is not defined.");
+          console.warn("LIFF_ID is not defined. Running in demo mode.");
+          setLiffInitDone(true);
           return;
         }
         await liff.init({ liffId: LIFF_ID });
-        if (!liff.isLoggedIn()) {
-          liff.login();
-        } else {
+        
+        if (liff.isLoggedIn()) {
           const profile = await liff.getProfile();
           setUserProfile({
             displayName: profile.displayName,
             pictureUrl: profile.pictureUrl
           });
+        } else if (liff.isInClient()) {
+          // If in LINE app but not logged in, try to login
+          liff.login();
         }
+        // If in external browser and not logged in, we stay as guest to allow preview
       } catch (err) {
         console.error("LIFF initialization failed", err);
+      } finally {
+        setLiffInitDone(true);
       }
     };
     initLiff();
@@ -69,17 +76,19 @@ const App: React.FC = () => {
 
   // Initial greeting
   useEffect(() => {
-    if (!userProfile) return; // Wait for profile
+    if (!liffInitDone) return; 
+
+    const displayName = userProfile?.displayName || "使い手";
 
     const timer = setTimeout(() => {
-      addMessage(`${userProfile.displayName}さん、こんにちは！お届けに関するヒアリングを開始します。`, 'bot');
+      addMessage(`${displayName}さん、こんにちは！お届けに関するヒアリングを開始します。`, 'bot');
       setTimeout(() => {
         addMessage("まず、ご希望の日程を教えてください。", 'bot');
         setCurrentStep(Step.SELECT_DATE);
       }, 800);
     }, 500);
     return () => clearTimeout(timer);
-  }, [userProfile, addMessage]);
+  }, [liffInitDone, userProfile, addMessage]);
 
   const handleDateSelect = (choice: string) => {
     addMessage(choice, 'user');
