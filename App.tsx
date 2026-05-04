@@ -229,7 +229,7 @@ const App: React.FC = () => {
             </h1>
             <p className="text-xs text-green-500 font-medium flex items-center gap-1">
               <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-              LIFF連携中
+              LINE公式アカウント連携中
             </p>
           </div>
         </div>
