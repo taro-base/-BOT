@@ -161,18 +161,18 @@ const App: React.FC = () => {
     };
 
     try {
-      // GAS usually handles JSON via POST
+      // GAS to receive data reliably
       await fetch(GAS_URL, {
         method: 'POST',
-        mode: 'no-cors', // standard for GAS web apps unless CORS is specifically set up
+        mode: 'no-cors', 
         headers: {
-          'Content-Type': 'application/json',
+          'Content-Type': 'text/plain', // Use text/plain to avoid CORS preflight in simplified POST
         },
         body: JSON.stringify(payload),
       });
 
-      // Since mode is 'no-cors', we can't reliably read the response status, 
-      // but if it didn't throw, we assume success for this simple case.
+      // Since mode is 'no-cors', we can't read the response back,
+      // we assume it was received if no error occurred.
       setTimeout(() => {
         setIsSubmitting(false);
         addMessage("送信が完了しました。ありがとうございます！", 'bot');
